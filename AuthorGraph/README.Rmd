@@ -1,0 +1,450 @@
+---
+title: 'StenoScope: Author Graph'
+author: "Tommi Suvitaival, Steno Diabetes Center Copenhagen, tommi.raimo.leo.suvitaival@regionh.dk"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: true
+    fig_width: 8
+    fig_height: 8
+    dev: jpeg
+    toc: yes
+  github_document:
+    fig_width: 8
+    fig_height: 8
+    dev: jpeg
+    toc: yes
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+# Load Data
+
+* The data set has been created by copying the contents from a publication list website to a text file.
+* Source: [Publications from Steno Diabetes Center Copenhagen in 2021](https://research.regionh.dk/en/publications/search.html?search=&organisationName=Steno%20Diabetes%20Center%20Copenhagen&publicationYearsFrom=2021&journalName=&organisations=49636648&publicationstatus=published&publicationcategory=33079909&peerreview=true&language=%20&publicationYearsTo=2021&type=%2Fdk%2Fatira%2Fpure%2Fresearchoutput%2Fresearchoutputtypes%2Fcontributiontojournal%2F%25&uri=&pageSize=500&page=0) (the Capital Region of Denmark; accessed 1.2.2022).
+
+```{r Load-Data}
+
+data.loaded <- 
+  read.delim(
+    file = "../data/publications-SDCC-2021.txt",
+    encoding = "UTF-8",
+    header = FALSE,
+    stringsAsFactors = FALSE
+  )
+
+```
+
+# Prepare the Data
+
+## Create a Data Frame
+
+* Create a data frame with publications as rows and properties as columns.
+
+```{r Data-Frame}
+
+data <-
+  matrix(
+    data = unlist( data.loaded ),
+    ncol = 4,
+    byrow = TRUE
+  )
+
+colnames( data ) <-
+  c(
+    "Status",
+    "Title",
+    "Info",
+    "Type"
+  )
+
+data <- 
+  data.frame(
+    data,
+    stringsAsFactors = FALSE
+  )
+
+head( data )
+
+```
+
+## Subset by Publication Type
+
+* Include journal articles and review articles in the analysis.
+
+```{r Subset-Publications}
+
+table( data$"Type" )
+
+is.included <- 
+  grepl( 
+    x = data$"Type",
+    pattern = "(Journal article)|(Review)"
+  )
+
+data <- data[ is.included, ]
+
+```
+
+## Create Additional Properties
+
+* Separate authors from the information column, which also contains the publication date and the journal reference.
+
+```{r Properties}
+
+# Split by the date text.
+
+tmp <-
+  stringr::str_split_fixed(
+    string = data[ , 3 ],
+    pattern = "(\\,\\s([0-9]+\\s)?([A-Z][a-z][a-z]\\s)?2021\\,\\s)",
+    n = 2
+  )
+
+colnames( tmp ) <- 
+  c(
+    "Authors",
+    "Reference"
+  )
+
+tmp <- 
+  data.frame(
+    tmp,
+    stringsAsFactors = FALSE
+  )
+
+data <-
+  dplyr::bind_cols(
+    data,
+    tmp
+  )
+
+str( data )
+
+```
+
+## Split Individual Authors
+
+* Separate individual authors, who are joined by comma or &-sign.
+* This creates a list, where each item corresponds to a publication, and the contents of the item is a character vector containing the names of the authors in the respective publication.
+
+```{r Authors-Split}
+
+authors <-
+  stringr::str_split(
+    string = data$"Authors",
+    pattern = "(\\.\\, )|(\\. \\& )"
+  )
+
+head( authors )
+
+```
+
+## Format Author Names
+
+* Remove additional punctuations and whitespaces.
+
+```{r Authors-Format}
+
+authors <-
+  lapply(
+    X = authors,
+    FUN = stringr::str_remove_all,
+    pattern = "\\,"
+  )
+
+authors <-
+  lapply(
+    X = authors,
+    FUN = stringr::str_remove_all,
+    pattern = "\\. "
+  )
+
+authors <-
+  lapply(
+    X = authors,
+    FUN = stringr::str_remove_all,
+    pattern = "\\."
+  )
+
+authors <-
+  lapply(
+    X = authors,
+    FUN = stringr::str_trim,
+    side = "both"
+  )
+
+authors <-
+  lapply(
+    X = authors,
+    FUN = stringr::str_squish
+  )
+
+head( authors )
+
+```
+
+## Extract unique authors
+
+```{r Authors-Unique}
+
+authors.unique <- sort( x = unique( unlist( authors ) ) )
+
+head( authors.unique )
+
+```
+
+# Network of Authors
+
+## Initialize the Adjacency Matrix
+
+* Authors-by-authors Adjacency matrix
+
+```{r Adjacency-Initialize}
+
+adjacency.mat <-
+  array( 
+    data = 0,
+    dim = c( 1, 1 ) * length( authors.unique )
+  )
+
+rownames( adjacency.mat ) <-
+  colnames( adjacency.mat ) <-
+  authors.unique
+
+str( adjacency.mat )
+
+str( 
+  object = adjacency.mat, 
+  vec.len = 5
+)
+
+```
+
+## Compute the Co-Occurrence of Author Pairs
+
+* Go through all publications 'i'.
+* Add up the co-occurrence count for the authors in the publication 'i'.
+
+```{r Adjacency-Compute}
+
+for ( i in 1:length( authors ) ) {
+  
+  tmp <- rownames( adjacency.mat ) %in% authors[[ i ]]
+  
+  adjacency.mat[ tmp, tmp ] <- adjacency.mat[ tmp, tmp ] + 1
+  
+}
+
+str( adjacency.mat )
+
+```
+
+## Subset Authors
+
+* Include authors, who have more than one publication.
+
+```{r Subset-Authors}
+
+is.included <- diag( adjacency.mat ) > 1
+
+data.plot <- adjacency.mat[ is.included, is.included ]
+
+str( data.plot )
+
+```
+
+## Wrap Author Names
+
+* Add line break upon whitespace.
+* Add line break upon dash.
+
+```{r Authors-Wrap}
+
+names <- rownames( data.plot )
+
+names <-
+  stringr::str_replace_all(
+    string = names,
+    pattern = "\\s",
+    replacement = "\n"
+  )
+
+names <-
+  stringr::str_replace_all(
+    string = names,
+    pattern = "\\-",
+    replacement = "-\n"
+  )
+
+names <-
+  stringr::str_replace_all(
+    string = names,
+    pattern = "\\n\\-",
+    replacement = ""
+  )
+
+names( names ) <- rownames( data.plot )
+
+head( names )
+
+```
+
+## Create a Network Representation of the Adjacency Matrix
+
+* Create a network representation of the adjacency matrix with the **network** package.
+* The network should be non-directional.
+
+```{r Network}
+
+net.network <- 
+  network::network(
+    x = data.plot,
+    directed = FALSE
+  )
+
+```
+
+## Lay Out the Network
+
+* Lay out the network on a two-dimensional plane (i.e., page) using the **ggnetwork** package.
+
+```{r Layout}
+
+ggnetwork <- ggnetwork::ggnetwork( x = net.network )
+
+head( ggnetwork )
+
+```
+
+## Define Additional Properties for the Visualization
+
+* Define properties of the network:
+  + Degree: number of vertices (i.e., connections) from each node (here: number of publications for each author)
+  + Size: size of each node in the visualization (here: based on degree)
+  + Label: Name of each node (here: author) to show in the visualization
+  + Text: Additional information to show for each node on hover
+    + Name of the node (here: author)
+    + Degree of the node (here: number of publications)
+    + Number of neighbors to the node (here: number of co-authors)
+
+```{r Visualization-Properties}
+
+ggnetwork$"degree" <- diag( data.plot )[ ggnetwork$"vertex.names" ]
+
+ggnetwork$"size" <- ggnetwork$"degree" * 10
+
+ggnetwork$"name.formatted" <- names[ ggnetwork$"vertex.names" ]
+
+tmp <- rowSums( data.plot > 0 ) - 1
+
+ggnetwork$"N.neighbors" <- tmp[ ggnetwork$"vertex.names" ]
+
+ggnetwork$"text" <-
+  paste0(
+    ggnetwork$"vertex.names",
+    ":\n\t",
+    ggnetwork$"degree",
+    " publications",
+    "\n\t",
+    ggnetwork$"N.neighbors",
+    " co-authors"
+  )
+
+head( ggnetwork )
+
+```
+
+## Create the Basic Visualization
+
+* Using the **ggplot2** package with rendering of the nodes and edges from the **ggnetwork** package.
+
+```{r Figure-Network-Basic}
+
+plot <-
+  ggplot2::ggplot(
+    data = ggnetwork,
+    mapping =
+      ggplot2::aes(
+        x = x,
+        y = y,
+        xend = xend,
+        yend = yend
+      )
+  ) +
+  ggnetwork::geom_edges() +
+  ggnetwork::geom_nodes()
+
+plot
+
+```
+
+## Create Visualization with Additional Properties
+
+* Add additional properties:
+  + Text for tooltip (used later in the interactive version)
+  + Formatted names of the nodes (here: authors)
+  + Transparent edges
+  + Node size according to the degree of the node (here: number of publications)
+  + Simple white colour theme
+
+```{r Figure-Network}
+
+plot <-
+  ggplot2::ggplot(
+    data = ggnetwork,
+    mapping =
+      ggplot2::aes(
+        x = x,
+        y = y,
+        xend = xend,
+        yend = yend,
+        label = name.formatted,
+        text = text
+      )
+  ) +
+  ggnetwork::geom_edges( alpha = 0.125 ) +
+  ggnetwork::geom_nodes(
+    mapping =
+      ggplot2::aes(
+        size = size
+      )
+  ) +
+  ggnetwork::geom_nodetext( 
+    alpha = 0.25,
+    size = 3
+  ) +
+  ggthemes::theme_solid()
+
+plot
+
+```
+
+## Create the Interactive Visualization
+
+* Create an interactive version of the visualization with the **ggplotly** function from the **plotly** package.
+* Show info text about an author on hover-over.
+
+```{r Figure-Network-Interactive}
+
+plotly::ggplotly(
+  p = plot,
+  tooltip = c( "text" )
+)
+
+```
+
+# Appendix
+
+# SessionInfo
+
+```{r SessionInfo}
+
+utils::sessionInfo()
+
+```
