@@ -17,11 +17,31 @@ output:
 always_allow_html: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 # Introduction
+
+This is a tutorial script to producing an **interactive visualization of a co-author network**. The network is based on a publication list of Steno Diabetes Center Copenhagen in 2021, extracted from [the Capital Region of Denmark](https://research.regionh.dk/en/publications/search.html?search=&organisationName=Steno%20Diabetes%20Center%20Copenhagen&publicationYearsFrom=2021&journalName=&organisations=49636648&publicationstatus=published&publicationcategory=33079909&peerreview=true&language=%20&publicationYearsTo=2021&type=%2Fdk%2Fatira%2Fpure%2Fresearchoutput%2Fresearchoutputtypes%2Fcontributiontojournal%2F%25&uri=&pageSize=500&page=0). Each author is a node in the network, and the author's position and vertices (connections to other authors) are dependent on, whom the author has co-authored publications with. Moreover, the total number of publications and co-author of the author are shown as additional information, when hovering the cursor over the author.
+
+The code is for R and it is, among others, based on packages [stringr](https://stringr.tidyverse.org/), [ggplot2](https://ggplot2.tidyverse.org/) and [plotly](https://plotly.com/r/).
+
+This document is part of the Github repository [StenoScope](https://github.com/tommi-s/StenoScope) by [Tommi Suvitaival](https://tommi-s.com/).
+
+View this document at https://tommi-s.com/StenoScope/AuthorGraph/ to show all output correctly.
+
+```{r, echo = FALSE}
+
+# Load the previously-generated result to show the final result already in the beginning.
+
+path.result <- paste0( here::here(), "/output/AuthorGraph/AuthorGraph.rds" )
+
+if ( file.exists( path.result ) ) {
+
+  plot.interactive.loaded <- readRDS( path.result )
+  
+  plot.interactive.loaded
+  
+}
+
+```
 
 # Load Data
 
@@ -138,7 +158,7 @@ str( data )
 authors <-
   stringr::str_split(
     string = data$"Authors",
-    pattern = "(\\.\\, )|(\\. \\& )"
+    pattern = "(\\.\\, )|(\\. \\& )|( \\& )"
   )
 
 head( authors )
@@ -313,6 +333,11 @@ net.network <-
 ## Lay Out the Network
 
 * Lay out the network on a two-dimensional plane (i.e., page) using the **ggnetwork** package.
+* The created data frame contains the definition of the network layout, where each row is a vertex:
+  + *x* and *y* are the starting coordinates of the vertex
+  + *xend* and *yend* are the ending coordinates of the vertex
+  + *vertex.names* is the name of the node in the starting coordinates
+  + (in an undirected graph, starting and ending nodes do not have topological difference)
 
 ```{r Layout}
 
@@ -384,7 +409,7 @@ plot
 
 ```
 
-## Create Visualization with Additional Properties
+## Create (the Passive) Visualization with Additional Properties
 
 * Add additional properties:
   + Text for tooltip (used later in the interactive version)
@@ -428,23 +453,65 @@ plot
 ## Create the Interactive Visualization
 
 * Create an interactive version of the visualization with the **ggplotly** function from the **plotly** package.
-* Show info text about an author on hover-over.
+* Show info text about an author as tooltip on hover-over.
 
-```{r Figure-Network-Interactive}
+```{r Figure-Network-Interactive-Create}
 
-plotly::ggplotly(
-  p = plot,
-  tooltip = c( "text" )
-)
+plot.interactive <-
+  plotly::ggplotly(
+    p = plot,
+    tooltip = c( "text" )
+  )
 
 ```
 
-# Appendix
+## View the Interactive Visualization
+
+```{r Figure-Network-Interactive}
+
+plot.interactive
+
+```
+
+## Save the Result
+
+* (Uncomment for saving the files.)
+
+```{r Figure-Network-Interactive-Export}
+
+path.result <- paste0( here::here(), "/output/AuthorGraph/" )
+
+# dir.create( 
+#   path = path.result,
+#   recursive = TRUE
+# )
+# 
+# saveRDS(
+#   object = plot.interactive,
+#   file = paste0( path.result, "AuthorGraph.rds" )
+# )
+
+```
 
 # SessionInfo
 
 ```{r SessionInfo}
 
 utils::sessionInfo()
+
+```
+
+# Appendix
+
+* Copy README.html to index.html to show this document on Github Pages.
+
+```{r index-html}
+
+if ( file.exists( "README.html" ) ) {
+  
+  system( command = "rm index.html" )
+  system( command = "cp README.html index.html" )
+  
+}
 
 ```
