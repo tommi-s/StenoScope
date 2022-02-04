@@ -5,13 +5,13 @@ date: "`r Sys.Date()`"
 output: 
   html_document:
     keep_md: true
-    fig_width: 8
-    fig_height: 8
+    fig_width: 9
+    fig_height: 9
     dev: jpeg
     toc: yes
   github_document:
-    fig_width: 8
-    fig_height: 8
+    fig_width: 9
+    fig_height: 9
     dev: jpeg
     toc: yes
 always_allow_html: true
@@ -50,9 +50,15 @@ if ( file.exists( path.result ) ) {
 
 ```{r Load-Data}
 
+file.path <-
+  paste0(
+    here::here(),
+    "/data/publications-SDCC-2021.txt"
+  )
+
 data.loaded <- 
   read.delim(
-    file = "../data/publications-SDCC-2021.txt",
+    file = file.path, # "../data/publications-SDCC-2021.txt"
     encoding = "UTF-8",
     header = FALSE,
     stringsAsFactors = FALSE
@@ -366,7 +372,11 @@ ggnetwork$"size" <- ggnetwork$"degree" * 10
 
 ggnetwork$"name.formatted" <- names[ ggnetwork$"vertex.names" ]
 
-tmp <- rowSums( data.plot > 0 ) - 1
+# Compute the number of co-authors, 
+# including co-authors, who might be outside the subset.
+
+tmp <- rowSums( adjacency.mat > 0 ) - 1
+# tmp <- rowSums( data.plot > 0 ) - 1
 
 ggnetwork$"N.neighbors" <- tmp[ ggnetwork$"vertex.names" ]
 
@@ -414,7 +424,7 @@ plot
 * Add additional properties:
   + Text for tooltip (used later in the interactive version)
   + Formatted names of the nodes (here: authors)
-  + Transparent edges
+  + Transparent vertices
   + Node size according to the degree of the node (here: number of publications)
   + Simple white colour theme
 
@@ -479,9 +489,10 @@ plot.interactive
 
 ```{r Figure-Network-Interactive-Export}
 
+# Save result to "../data/publications-SDCC-2021.txt"
 path.result <- paste0( here::here(), "/output/AuthorGraph/" )
 
-# dir.create( 
+# dir.create(
 #   path = path.result,
 #   recursive = TRUE
 # )
